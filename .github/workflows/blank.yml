@@ -1,0 +1,54 @@
+name: MASM Build → BIN (No Upload)
+
+on:
+  push:
+    paths:
+      - '**/*.asm'
+      - 'includes/**'
+  pull_request:
+    paths:
+      - '**/*.asm'
+      - 'includes/**'
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Install MASM + Linker
+        run: |
+          choco install visualstudio2019buildtools --yes --package-parameters "--add Microsoft.VisualStudio.Component.VC.Tools.x86.x64"
+          setx PATH "%PATH%;C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools\VC\Tools\MSVC\*\bin\Hostx64\x64"
+
+      - name: Create build folder
+        run: mkdir build
+
+      - name: Assemble ASM files to BIN
+        run: |
+          BUILD_DIR=$(pwd)/build
+          mkdir -p "$BUILD_DIR"
+
+          for f in $(dir /b *.asm); do
+            filename=$(basename "$f" .asm)
+            echo "Processing $f → $filename.bin"
+
+            # Detect mode by comment ;MODE=16 or ;MODE=32
+            SET MODE=32
+            findstr /C:";MODE=16" "$f" >nul && SET MODE=16
+
+            if "%MODE%"=="16" (
+                echo "Assembling 16-bit $f"
+                ml /c /coff "$f" /Fo"$BUILD_DIR\$filename.obj" /I includes
+                link /TINY /ENTRY:start "$BUILD_DIR\$filename.obj" /OUT:"$BUILD_DIR\$filename.exe"
+            ) else (
+                echo "Assembling 32-bit $f"
+                ml /c /coff "$f" /Fo"$BUILD_DIR\$filename.obj" /I includes
+                link /SUBSYSTEM:NATIVE /ENTRY:main "$BUILD_DIR\$filename.obj" /OUT:"$BUILD_DIR\$filename.exe"
+            )
+
+            # Convert .exe to raw binary
+            copy /b "$BUILD_DIR\$filename.exe" "$BUILD_DIR\$filename.bin"
+          done
