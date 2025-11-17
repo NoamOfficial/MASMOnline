@@ -1,4 +1,4 @@
-name: MASM Build → BIN (No Upload)
+name: MASM Build → BIN (VS2022)
 
 on:
   push:
@@ -18,17 +18,22 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Install MASM + Linker
+      - name: Install VS2022 Build Tools
+        uses: microsoft/visualstudio-setup-action@v1
+        with:
+          version: '2022'
+          components: 'VC.Tools.x86.x64'
+
+      - name: Set MASM path
         run: |
-          choco install visualstudio2019buildtools --yes --package-parameters "--add Microsoft.VisualStudio.Component.VC.Tools.x86.x64"
-          setx PATH "%PATH%;C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools\VC\Tools\MSVC\*\bin\Hostx64\x64"
+          setx PATH "%PATH%;C:\Program Files\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC\*\bin\Hostx64\x64"
 
       - name: Create build folder
         run: mkdir build
 
       - name: Assemble ASM files to BIN
         run: |
-          BUILD_DIR=$(pwd)/build
+          $BUILD_DIR = "$(pwd)/build"
           mkdir -p "$BUILD_DIR"
 
           for f in $(dir /b *.asm); do
@@ -49,6 +54,7 @@ jobs:
                 link /SUBSYSTEM:NATIVE /ENTRY:main "$BUILD_DIR\$filename.obj" /OUT:"$BUILD_DIR\$filename.exe"
             )
 
-            # Convert .exe to raw binary
+            REM Convert .exe to raw binary
             copy /b "$BUILD_DIR\$filename.exe" "$BUILD_DIR\$filename.bin"
           done
+
