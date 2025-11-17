@@ -29,9 +29,11 @@ jobs:
           setx PATH "%PATH%;C:\Program Files\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC\*\bin\Hostx64\x64"
 
       - name: Enable delayed expansion
-        run: cmd /V:ON /C "echo Delayed expansion enabled"
+        shell: cmd
+        run: setlocal enabledelayedexpansion
 
       - name: Create build folder
+        shell: cmd
         run: mkdir build
 
       - name: Assemble ASM files to BIN
@@ -40,7 +42,7 @@ jobs:
           setlocal enabledelayedexpansion
           for %%f in (*.asm) do (
               set "filename=%%~nf"
-              
+
               REM Only rebuild if source is newer than binary
               if not exist build\!filename!.bin (
                   echo Assembling new file %%f
@@ -75,14 +77,11 @@ jobs:
           )
 
       - name: Package all BINs into ZIP
-        shell: cmd
+        shell: powershell
         run: |
-          powershell -Command "Compress-Archive -Path build\*.bin -DestinationPath build\AllBins.zip"
-          
-      - name: Provide download link
-        shell: cmd
-        run: |
-          echo All binaries packaged in build\AllBins.zip
+          Compress-Archive -Path build\*.bin -DestinationPath build\AllBins.zip
+          Write-Host "All binaries packaged in build\AllBins.zip"
+
 
 
 
