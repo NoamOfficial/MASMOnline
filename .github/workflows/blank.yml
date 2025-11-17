@@ -1,27 +1,88 @@
-      - name: Assemble ASM files to BIN
+name: MASM Build → BIN (VS2022)
+
+on:
+  push:
+    paths:
+      - '**/*.asm'
+      - 'includes/**'
+  pull_request:
+    paths:
+      - '**/*.asm'
+      - 'includes/**'
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Install VS2022 Build Tools
+        uses: microsoft/visualstudio-setup-action@v1
+        with:
+          version: '2022'
+          components: 'VC.Tools.x86.x64'
+
+      - name: Set MASM path
         run: |
-          mkdir build
+          setx PATH "%PATH%;C:\Program Files\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC\*\bin\Hostx64\x64"
 
+      - name: Enable delayed expansion
+        run: cmd /V:ON /C "echo Delayed expansion enabled"
+
+      - name: Create build folder
+        run: mkdir build
+
+      - name: Assemble ASM files to BIN
+        shell: cmd
+        run: |
+          setlocal enabledelayedexpansion
           for %%f in (*.asm) do (
-            set "filename=%%~nf"
-            echo Processing %%f → !filename!.bin
+              set "filename=%%~nf"
+              
+              REM Only rebuild if source is newer than binary
+              if not exist build\!filename!.bin (
+                  echo Assembling new file %%f
+              ) else (
+                  for %%x in (build\!filename!.bin) do (
+                      if %%~tf LSS %%~tf (
+                          echo Rebuilding modified file %%f
+                      ) else (
+                          echo Skipping unchanged %%f
+                          goto :continue
+                      )
+                  )
+              )
 
-            REM Detect mode by comment ;MODE=16 or ;MODE=32
-            set "MODE=32"
-            findstr /C:";MODE=16" "%%f" >nul && set "MODE=16"
+              REM Detect mode by comment ;MODE=16 or ;MODE=32
+              set "MODE=32"
+              findstr /C:";MODE=16" "%%f" >nul && set "MODE=16"
 
-            if "!MODE!"=="16" (
-                echo Assembling 16-bit %%f
-                ml /c /coff "%%f" /Fo"build\!filename!.obj" /I includes
-                link /TINY /ENTRY:start "build\!filename!.obj" /OUT:"build\!filename!.exe"
-            ) else (
-                echo Assembling 32-bit %%f
-                ml /c /coff "%%f" /Fo"build\!filename!.obj" /I includes
-                link /SUBSYSTEM:NATIVE /ENTRY:main "build\!filename!.obj" /OUT:"build\!filename!.exe"
-            )
+              if "!MODE!"=="16" (
+                  echo Assembling 16-bit %%f
+                  ml /c /coff "%%f" /Fo"build\!filename!.obj" /I includes
+                  link /TINY /ENTRY:start "build\!filename!.obj" /OUT:"build\!filename!.exe"
+              ) else (
+                  echo Assembling 32-bit %%f
+                  ml /c /coff "%%f" /Fo"build\!filename!.obj" /I includes
+                  link /SUBSYSTEM:NATIVE /ENTRY:_start "build\!filename!.obj" /OUT:"build\!filename!.exe"
+              )
 
-            REM Convert .exe to raw binary
-            copy /b "build\!filename!.exe" "build\!filename!.bin"
+              REM Convert .exe to raw binary
+              copy /b "build\!filename!.exe" "build\!filename!.bin" >nul
+              :continue
           )
+
+      - name: Package all BINs into ZIP
+        shell: cmd
+        run: |
+          powershell -Command "Compress-Archive -Path build\*.bin -DestinationPath build\AllBins.zip"
+          
+      - name: Provide download link
+        shell: cmd
+        run: |
+          echo All binaries packaged in build\AllBins.zip
+
 
 
